@@ -53,3 +53,34 @@ void free_physical_pages(struct ppage *ppage_list) {
     free_physical_pages_head = ppage_list;
     free_physical_pages_head->prev = NULL;
 }
+
+struct page_directory_entry pd[1024] __attribute__((aligned(4096)));
+struct page pt[1024] __attribute__((aligned(4096)));
+
+void *map_pages(void *vaddr, struct ppage *pglist, struct page_directory_entry *pd) {
+    uint32_t va = (uint32_t)vaddr;
+    struct ppage *cur = pglist;
+
+    uint32_t pd_index = va >> 22;
+    uint32_t pt_index = (va >> 12) & 0x03FF;
+
+    if (!pd[pd_index].present) {
+        pd[pd_index].frame = ((uint32_t)pt) >> 12;
+        pd[pd_index].present = 1;
+        pd[pd_index].rw = 1;
+        pd[pd_index].user = 0;
+    }
+
+    while (cur != NULL) {
+        pt[pt_index].frame = ((uint32_t)cur->physical_addr) >> 12;
+        pt[pt_index].present = 1;
+        pt[pt_index].rw = 1;
+        pt[pt_index].user = 0;
+
+        cur = cur->next;
+        pt_index++;
+        if (pt_index >= 1024) break;
+    }
+
+    return vaddr;
+}
