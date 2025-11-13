@@ -1,67 +1,29 @@
-UNAME_M := $(shell uname -m)
+CC=i686-linux-gnu-gcc
+AS=nasm
+LD=i686-linux-gnu-ld
+CFLAGS=-ffreestanding -mgeneral-regs-only -mno-mmx -m32 -march=i386 -fno-pie -fno-stack-protector -Wall -g3
+ASFLAGS=-f elf32
+LDFLAGS=-T linker.ld
 
-ifeq ($(UNAME_M),aarch64)
-PREFIX:=i386-unknown-elf-
-BOOTIMG:=/usr/local/grub/lib/grub/i386-pc/boot.img
-GRUBLOC:=/usr/local/grub/bin/
-else
-PREFIX:=
-BOOTIMG:=/usr/lib/grub/i386-pc/boot.img
-GRUBLOC :=
-endif
+OBJDIR=obj
+OBJS=$(OBJDIR)/kernel_main.o $(OBJDIR)/page.o $(OBJDIR)/ide.o $(OBJDIR)/paging.o $(OBJDIR)/fat.o
 
-CC := $(PREFIX)gcc
-LD := $(PREFIX)ld
-OBJDUMP := $(PREFIX)objdump
-OBJCOPY := $(PREFIX)objcopy
-SIZE := $(PREFIX)size
-CONFIGS := -DCONFIG_HEAP_SIZE=4096
-CFLAGS := -ffreestanding -mgeneral-regs-only -mno-mmx -m32 -march=i386 -fno-pie -fno-stack-protector -g3 -Wall
+all: kernel rootfs.img
 
-ODIR = obj
-SDIR = src
+$(OBJDIR):
+	mkdir -p $(OBJDIR)
 
-# Add page.o here for the page frame allocator
-OBJS = \
-	kernel_main.o \
-	page.o \
+$(OBJDIR)/%.o: src/%.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# Make sure to keep a blank line here after OBJS list
+$(OBJDIR)/ide.o: src/ide.s | $(OBJDIR)
+	$(AS) $(ASFLAGS) $< -o $@
 
-OBJ = $(patsubst %,$(ODIR)/%,$(OBJS))
-
-$(ODIR)/%.o: $(SDIR)/%.c
-	$(CC) $(CFLAGS) -c -g -o $@ $^
-
-$(ODIR)/%.o: $(SDIR)/%.s
-	$(CC) $(CFLAGS) -c -g -o $@ $^
-
-all: bin rootfs.img
-
-bin: obj $(OBJ)
-	$(LD) -melf_i386  obj/* -Tkernel.ld -o kernel
-	$(SIZE) kernel
-
-obj:
-	mkdir -p obj
+kernel: $(OBJS)
+	$(LD) $(LDFLAGS) -o $@ $(OBJS)
 
 rootfs.img:
-	dd if=/dev/zero of=rootfs.img bs=1M count=32
-	$(GRUBLOC)grub-mkimage -p "(hd0,msdos1)/boot" -o grub.img -O i386-pc normal biosdisk multiboot multiboot2 configfile fat exfat part_msdos
-	dd if=$(BOOTIMG) of=rootfs.img conv=notrunc
-	dd if=grub.img of=rootfs.img conv=notrunc bs=512 seek=1 #########
-	echo 'start=2048, type=83, bootable' | sfdisk rootfs.img
-	mkfs.vfat --offset 2048 -F16 rootfs.img
-	mcopy -i rootfs.img@@1M kernel ::/
-	mmd -i rootfs.img@@1M boot
-	mcopy -i rootfs.img@@1M grub.cfg ::/boot
-	@echo " -- BUILD COMPLETED SUCCESSFULLY --"
-
-run:
-	qemu-system-i386 -hda rootfs.img
-
-debug:
-	./launch_qemu.sh
+	dd if=/dev/zero of=rootfs.img bs=512 count=32768
 
 clean:
-	rm -f grub.img kernel rootfs.img obj/*
+	rm -rf $(OBJDIR) kernel rootfs.img

@@ -1,8 +1,8 @@
 #include "page.h"
-#include <stddef.h> // for NULL
+#include <stddef.h>
 
 #define NUM_PAGES 128
-#define PAGE_SIZE  (2 * 1024 * 1024) // 2 MB pages
+#define PAGE_SIZE  (2 * 1024 * 1024)
 
 struct ppage physical_page_array[NUM_PAGES];
 
@@ -17,7 +17,6 @@ void init_pfa_list(void) {
     free_physical_pages_head = &physical_page_array[0];
 }
 
-// Allocate npages from the free list
 struct ppage *allocate_physical_pages(unsigned int npages) {
     if (!free_physical_pages_head || npages == 0) return NULL;
 
@@ -45,7 +44,6 @@ void free_physical_pages(struct ppage *ppage_list) {
         last = last->next;
     }
 
-    // Attach the freed list to the front of the free list
     last->next = free_physical_pages_head;
     if (free_physical_pages_head) {
         free_physical_pages_head->prev = last;
